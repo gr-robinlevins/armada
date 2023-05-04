@@ -344,6 +344,7 @@ func (c *FakeClusterContext) addNodes(specs []*NodeSpec) {
 func (c *FakeClusterContext) trySchedule(pod *v1.Pod) (scheduled bool, removed bool) {
 	c.rwLock.Lock()
 	defer c.rwLock.Unlock()
+	log.Info("Attempting to schedule pod %s", pod.Name)
 
 	if _, exists := c.pods[pod.Name]; !exists {
 		return false, true
@@ -353,12 +354,16 @@ func (c *FakeClusterContext) trySchedule(pod *v1.Pod) (scheduled bool, removed b
 	// This will likely account for all pods, as the armada scheduler now sets the selector
 	nodes := c.nodes
 	if selectedNode, exists := pod.Spec.NodeSelector[c.nodeIdLabel]; exists {
+		log.Info("pod %s is using a node selector")
 		if node, ok := c.nodesByNodeId[selectedNode]; ok {
 			nodes = []*v1.Node{node}
 		} else {
 			log.Warnf("pod %s is targeting node (%s) that does not exist.", pod.Name, selectedNode)
 			return false, true
 		}
+	}
+	for key, value := range pod.Spec.NodeSelector {
+		log.Infof("Pod %s node selector %s - %s", pod.Name, key, value)
 	}
 
 	// fill more busy nodes first
@@ -377,9 +382,11 @@ func (c *FakeClusterContext) trySchedule(pod *v1.Pod) (scheduled bool, removed b
 			resources := armadaresource.TotalPodResourceRequest(&pod.Spec)
 			c.nodeAvailableResource[n.Name].Sub(resources)
 			pod.Spec.NodeName = n.Name
+			log.Infof("Pod %s scheduled on %s", pod.Name, n.Name)
 			return true, false
 		}
 	}
+	log.Infof("Pod %s is unschedulable")
 	return false, false
 }
 
