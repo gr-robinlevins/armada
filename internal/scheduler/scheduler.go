@@ -294,6 +294,13 @@ func (s *Scheduler) syncState(ctx context.Context) ([]*jobdb.Job, error) {
 	}
 
 	jobsToUpdate := maps.Values(jobsToUpdateById)
+
+	for _, job := range jobsToUpdate {
+		if !job.Queued() && !job.HasRuns() {
+			panic(fmt.Sprintf("job %s is not queued but has no runs", job.Id()))
+		}
+	}
+
 	err = s.jobDb.BatchDelete(txn, jobsToDelete)
 	if err != nil {
 		return nil, err
