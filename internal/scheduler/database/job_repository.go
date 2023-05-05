@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/armadaproject/armada/internal/common/compress"
 	"github.com/armadaproject/armada/internal/common/database"
@@ -137,13 +138,14 @@ func (r *PostgresJobRepository) FetchJobUpdates(ctx context.Context, jobSerial i
 	}, func(tx pgx.Tx) error {
 		var err error
 		queries := New(tx)
-
+		log.Infof("Fetching job from serial %d", jobSerial)
 		// Fetch jobs
 		updatedJobRows, err := fetch(jobSerial, r.batchSize, func(from int64) ([]SelectUpdatedJobsRow, error) {
 			return queries.SelectUpdatedJobs(ctx, SelectUpdatedJobsParams{Serial: from, Limit: r.batchSize})
 		})
 		updatedJobs = make([]Job, len(updatedJobRows))
 		for i, row := range updatedJobRows {
+			log.Infof("received job %s with serial %d", row.JobID, row.Serial)
 			updatedJobs[i] = Job{
 				JobID:                   row.JobID,
 				JobSet:                  row.JobSet,
@@ -171,6 +173,11 @@ func (r *PostgresJobRepository) FetchJobUpdates(ctx context.Context, jobSerial i
 		updatedRuns, err = fetch(jobRunSerial, r.batchSize, func(from int64) ([]Run, error) {
 			return queries.SelectNewRuns(ctx, SelectNewRunsParams{Serial: from, Limit: r.batchSize})
 		})
+
+		log.Infof("Fetching job runs from serial %d", jobRunSerial)
+		for _, run := range updatedRuns {
+			log.Infof("received run %s with serial %d", run.RunID.String(), run.Serial)
+		}
 
 		return err
 	})
