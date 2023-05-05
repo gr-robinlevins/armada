@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus/ctxlogrus"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/armadaproject/armada/internal/common/compress"
 	"github.com/armadaproject/armada/internal/common/database"
@@ -127,6 +127,8 @@ func (r *PostgresJobRepository) FetchJobRunErrors(ctx context.Context, runIds []
 // FetchJobUpdates returns all jobs and job dbRuns that have been updated after jobSerial and jobRunSerial respectively
 // These updates are guaranteed to be consistent with each other
 func (r *PostgresJobRepository) FetchJobUpdates(ctx context.Context, jobSerial int64, jobRunSerial int64) ([]Job, []Run, error) {
+	log := ctxlogrus.Extract(ctx)
+	log = log.WithField("function", "FetchJobUpdates")
 	var updatedJobs []Job = nil
 	var updatedRuns []Run = nil
 
