@@ -89,8 +89,14 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 	nodeIdByJobId := make(map[string]string)
 	scheduledJobs := make([]interfaces.LegacySchedulerJob, 0)
 	totalGangSchedulingTime := time.Duration(0)
+	totalResultHandlingTime := time.Duration(0)
+	totalIteratorTime := time.Duration(0)
+	loopStart := time.Now()
 	for {
+		iteratorStart := time.Now()
 		gctx, err := sch.candidateGangIterator.Next()
+		nextDuration := time.Now().Sub(iteratorStart)
+		totalIteratorTime += nextDuration
 		if err != nil {
 			sch.schedulingContext.TerminationReason = err.Error()
 			return nil, err
@@ -114,6 +120,7 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 		gangScheduleDuration := time.Now().Sub(gangScheduleStartTime)
 		totalGangSchedulingTime += gangScheduleDuration
 
+		resultHandlingStart := time.Now()
 		if err != nil {
 			return nil, err
 		} else if ok {
@@ -136,7 +143,11 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 				break
 			}
 		}
+		resultHandlingDuration := time.Now().Sub(resultHandlingStart)
+		totalResultHandlingTime += resultHandlingDuration
 	}
+	loopDuration := time.Now().Sub(loopStart)
+
 	log.Infof("Gang schedule summary duration %s cache hit %d cache miss %d key calc duration %s", totalGangSchedulingTime, sch.gangScheduler.CacheHit, sch.gangScheduler.CacheMiss, sch.gangScheduler.KeyCalculationDuration)
 	if sch.schedulingContext.TerminationReason == "" {
 		sch.schedulingContext.TerminationReason = "no remaining candidate jobs"
@@ -144,6 +155,9 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 	if len(scheduledJobs) != len(nodeIdByJobId) {
 		return nil, errors.Errorf("only %d out of %d jobs mapped to a node", len(nodeIdByJobId), len(scheduledJobs))
 	}
+	log.Infof("Queue scheduler loop time took %s", loopDuration)
+	log.Infof("Queue scheduler iterator time took %s", totalIteratorTime)
+	log.Infof("Queue scheduler result handling time took %s", totalResultHandlingTime)
 	log.Infof("Queue scheduler took %s", time.Now().Sub(start))
 	return &SchedulerResult{
 		PreemptedJobs: nil,
