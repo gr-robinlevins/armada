@@ -245,6 +245,8 @@ func (l *FairSchedulingAlgo) scheduleOnExecutor(
 	executor *schedulerobjects.Executor,
 	db *jobdb.JobDb,
 ) (*SchedulerResult, *schedulercontext.SchedulingContext, error) {
+	log := ctxlogrus.Extract(ctx)
+	executorScheduleStart := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	nodeDb, err := l.constructNodeDb(
@@ -252,9 +254,11 @@ func (l *FairSchedulingAlgo) scheduleOnExecutor(
 		accounting.jobsByExecutorId[executor.Id],
 		l.config.Preemption.PriorityClasses,
 	)
+	log.Infof("constructing nodedb on executor %s took %s", executor.Id, time.Now().Sub(executorScheduleStart))
 	if err != nil {
 		return nil, nil, err
 	}
+	setupStart := time.Now()
 	sctx := schedulercontext.NewSchedulingContext(
 		executor.Id,
 		executor.Pool,
@@ -289,11 +293,15 @@ func (l *FairSchedulingAlgo) scheduleOnExecutor(
 	if l.config.EnableAssertions {
 		scheduler.EnableAssertions()
 	}
+	log.Infof("setting up context on executor %s took %s", executor.Id, time.Now().Sub(setupStart))
+	scheduleStart := time.Now()
 	result, err := scheduler.Schedule(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	log.Infof("inner scheduling call on executor %s took %s", executor.Id, time.Now().Sub(scheduleStart))
 
+	updatingRunsStart := time.Now()
 	for i, job := range result.PreemptedJobs {
 		jobDbJob := job.(*jobdb.Job)
 		if run := jobDbJob.LatestRun(); run != nil {
@@ -315,6 +323,8 @@ func (l *FairSchedulingAlgo) scheduleOnExecutor(
 			result.ScheduledJobs[i] = jobDbJob.WithQueued(false).WithNewRun(executor.Id, node.Name)
 		}
 	}
+	log.Infof("updating runs on executor %s took %s", executor.Id, time.Now().Sub(updatingRunsStart))
+	log.Infof("scheduling on executor %s took %s", executor.Id, time.Now().Sub(executorScheduleStart))
 	return result, sctx, nil
 }
 
