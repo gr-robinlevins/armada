@@ -68,6 +68,7 @@ func (sch *QueueScheduler) SkipUnsuccessfulSchedulingKeyCheck() {
 
 func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, error) {
 	log := ctxlogrus.Extract(ctx)
+	start := time.Now()
 	if ResourceListAsWeightedApproximateFloat64(sch.schedulingContext.ResourceScarcity, sch.schedulingContext.TotalResources) == 0 {
 		// This refers to resources available across all clusters, i.e.,
 		// it may include resources not currently considered for scheduling.
@@ -143,6 +144,7 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 	if len(scheduledJobs) != len(nodeIdByJobId) {
 		return nil, errors.Errorf("only %d out of %d jobs mapped to a node", len(nodeIdByJobId), len(scheduledJobs))
 	}
+	log.Infof("Queue scheduler took %s", time.Now().Sub(start))
 	return &SchedulerResult{
 		PreemptedJobs: nil,
 		ScheduledJobs: scheduledJobs,

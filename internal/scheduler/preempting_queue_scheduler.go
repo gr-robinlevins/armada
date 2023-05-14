@@ -99,6 +99,7 @@ func (sch *PreemptingQueueScheduler) SkipUnsuccessfulSchedulingKeyCheck() {
 func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, error) {
 	log := ctxlogrus.Extract(ctx)
 	log = log.WithField("service", "PreemptingQueueScheduler")
+	start := time.Now()
 	if ResourceListAsWeightedApproximateFloat64(sch.schedulingContext.ResourceScarcity, sch.schedulingContext.TotalResources) == 0 {
 		// This refers to resources available across all clusters, i.e.,
 		// it may include resources not currently considered for scheduling.
@@ -131,6 +132,8 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 	// We compare against this snapshot after scheduling to detect changes.
 	snapshot := sch.nodeDb.Txn(false)
 
+	log.Infof("preempting scheduler setup took %s", time.Now().Sub(start))
+	evictionStart := time.Now()
 	// Evict preemptible jobs.
 	evictorResult, inMemoryJobRepo, err := sch.evict(
 		ctxlogrus.ToContext(
@@ -150,6 +153,8 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 	}
 	maps.Copy(preemptedJobsById, evictorResult.EvictedJobsById)
 	maps.Copy(sch.nodeIdByJobId, evictorResult.NodeIdByJobId)
+
+	log.Infof("preempting scheduler eviction took %s", time.Now().Sub(evictionStart))
 
 	// Re-schedule evicted jobs/schedule new jobs.
 	schedulerResult, err := sch.schedule(
@@ -172,6 +177,7 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 	}
 	maps.Copy(sch.nodeIdByJobId, schedulerResult.NodeIdByJobId)
 
+	evictOversubscribed := time.Now()
 	// Evict jobs on oversubscribed nodes.
 	evictorResult, inMemoryJobRepo, err = sch.evict(
 		ctxlogrus.ToContext(
@@ -204,6 +210,10 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 	}
 	maps.Copy(sch.nodeIdByJobId, evictorResult.NodeIdByJobId)
 
+	log.Infof("preempting scheduler evict oversubscribed took %s", time.Now().Sub(evictOversubscribed))
+
+
+	rescheduleStart := time.Now()
 	// Re-schedule evicted jobs/schedule new jobs.
 	// Only necessary if a non-zero number of jobs were evicted.
 	if len(evictorResult.EvictedJobsById) > 0 {
@@ -231,6 +241,9 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 		maps.Copy(sch.nodeIdByJobId, schedulerResult.NodeIdByJobId)
 	}
 
+	log.Infof("preempting scheduler reschedule took %s", time.Now().Sub(rescheduleStart))
+
+	unbindStart := time.Now()
 	preemptedJobs := maps.Values(preemptedJobsById)
 	scheduledJobs := maps.Values(scheduledJobsById)
 	if err := sch.unbindJobs(append(
@@ -245,6 +258,8 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 	if s := JobsSummary(scheduledJobs); s != "" {
 		log.Infof("scheduling new jobs; %s", s)
 	}
+	log.Infof("preempting scheduler unbind took %s", time.Now().Sub(unbindStart))
+	assertionStart := time.Now()
 	if sch.enableAssertions {
 		err := sch.assertions(
 			ctxlogrus.ToContext(
@@ -260,6 +275,8 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 			return nil, err
 		}
 	}
+	log.Infof("preempting scheduler assertions took %s", time.Now().Sub(assertionStart))
+	log.Infof("preempting scheduler took %s", time.Now().Sub(start))
 	return &SchedulerResult{
 		PreemptedJobs: preemptedJobs,
 		ScheduledJobs: scheduledJobs,
@@ -463,6 +480,7 @@ func (sch *PreemptingQueueScheduler) evictionAssertions(evictedJobsById map[stri
 
 func (sch *PreemptingQueueScheduler) schedule(ctx context.Context, inMemoryJobRepo *InMemoryJobRepository, jobRepo JobRepository) (*SchedulerResult, error) {
 	log := ctxlogrus.Extract(ctx)
+	start := time.Now()
 	jobIteratorByQueue := make(map[string]JobIterator)
 	for _, qctx := range sch.schedulingContext.QueueSchedulingContexts {
 		evictedIt, err := inMemoryJobRepo.GetJobIterator(ctx, qctx.Queue)
@@ -487,10 +505,12 @@ func (sch *PreemptingQueueScheduler) schedule(ctx context.Context, inMemoryJobRe
 	if sch.skipUnsuccessfulSchedulingKeyCheck {
 		sched.SkipUnsuccessfulSchedulingKeyCheck()
 	}
+	log.Infof("Preempting scheduler inner setup took %s", time.Now().Sub(start))
 	result, err := sched.Schedule(ctx)
 	if err != nil {
 		return nil, err
 	}
+	accountingStart := time.Now()
 	if len(result.PreemptedJobs) != 0 {
 		return nil, errors.New("unexpected preemptions during scheduling")
 	}
@@ -500,6 +520,8 @@ func (sch *PreemptingQueueScheduler) schedule(ctx context.Context, inMemoryJobRe
 	if s := JobsSummary(result.ScheduledJobs); s != "" {
 		log.Infof("re-scheduled %d jobs; %s", len(result.ScheduledJobs), s)
 	}
+	log.Infof("Preempting scheduler inner accouting update took %s", time.Now().Sub(accountingStart))
+	log.Infof("Preempting scheduler inner took %s", time.Now().Sub(start))
 	return result, nil
 }
 
