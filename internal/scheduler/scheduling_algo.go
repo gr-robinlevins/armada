@@ -93,6 +93,7 @@ func (l *FairSchedulingAlgo) Schedule(
 	}
 	for _, executor := range accounting.executors {
 		log.Infof("scheduling on %s", executor.Id)
+		scheduleStart := time.Now()
 		schedulerResult, sctx, err := l.scheduleOnExecutor(
 			ctx,
 			accounting,
@@ -127,6 +128,7 @@ func (l *FairSchedulingAlgo) Schedule(
 
 		// Update accounting.
 		accounting.totalAllocationByPoolAndQueue[executor.Pool] = sctx.AllocatedByQueueAndPriority()
+		log.Infof("finished scheduling on %s in %s", executor.Id, time.Now().Sub(scheduleStart))
 	}
 	return overallSchedulerResult, nil
 }

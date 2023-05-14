@@ -168,6 +168,8 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // If updateAll is true, we generate events from all jobs in the jobDb.
 // Otherwise, we only generate events from jobs updated since the last cycle.
 func (s *Scheduler) cycle(ctx context.Context, updateAll bool, leaderToken LeaderToken) error {
+	log := ctxlogrus.Extract(ctx)
+	log = log.WithField("service", "cycle")
 	// Update job state.
 	updatedJobs, err := s.syncState(ctx)
 	if err != nil {
@@ -201,7 +203,10 @@ func (s *Scheduler) cycle(ctx context.Context, updateAll bool, leaderToken Leade
 	events = append(events, expirationEvents...)
 
 	// Schedule jobs.
+	scheduleStart := time.Now()
 	overallSchedulerResult, err := s.schedulingAlgo.Schedule(ctx, txn, s.jobDb)
+	scheduleDuration := time.Now().Sub(scheduleStart)
+	log.Infof("Schedule duration %s", scheduleDuration)
 	if err != nil {
 		return err
 	}

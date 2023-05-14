@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -25,6 +26,9 @@ type GangScheduler struct {
 	unsuccessfulSchedulingKeys map[schedulerobjects.SchedulingKey]*schedulercontext.JobSchedulingContext
 	// If true, the unsuccessfulSchedulingKeys check is omitted.
 	skipUnsuccessfulSchedulingKeyCheck bool
+	CacheHit                           int
+	CacheMiss                          int
+	KeyCalculationDuration             time.Duration
 }
 
 func NewGangScheduler(
@@ -78,7 +82,11 @@ func (sch *GangScheduler) Schedule(ctx context.Context, gctx *schedulercontext.G
 	// If any jobs were marked, set the unschedulableReason to that of the first unsuccessful job and return.
 	if !sch.skipUnsuccessfulSchedulingKeyCheck {
 		for _, jctx := range gctx.JobSchedulingContexts {
-			if schedulingKey, ok := schedulingKeyFromLegacySchedulerJob(jctx.Job, sch.schedulingContext.PriorityClasses); ok {
+			schedulingKeyStart := time.Now()
+			schedulingKey, ok := schedulingKeyFromLegacySchedulerJob(jctx.Job, sch.schedulingContext.PriorityClasses)
+			schedulingKeyCalcDuration := time.Now().Sub(schedulingKeyStart)
+			sch.KeyCalculationDuration += schedulingKeyCalcDuration
+			if ok {
 				if unsuccessfulJctx, ok := sch.unsuccessfulSchedulingKeys[schedulingKey]; ok {
 					jctx.UnschedulableReason = unsuccessfulJctx.UnschedulableReason
 					jctx.PodSchedulingContext = unsuccessfulJctx.PodSchedulingContext
@@ -89,11 +97,13 @@ func (sch *GangScheduler) Schedule(ctx context.Context, gctx *schedulercontext.G
 			if jctx.UnschedulableReason != "" {
 				ok = false
 				unschedulableReason = jctx.UnschedulableReason
+				sch.CacheHit++
 				return
 			}
 		}
 	}
 
+	sch.CacheMiss++
 	// Try scheduling the gang.
 	sch.schedulingContext.AddGangSchedulingContext(gctx)
 	gangAddedToSchedulingContext = true

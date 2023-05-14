@@ -10,7 +10,6 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -50,20 +49,17 @@ func CreateGrpcServer(
 	// By default, information contained in the request context is logged
 	// tagsExtractor pulls information out of the request payload (a protobuf) and stores it in
 	// the context, such that it is logged.
-	messageDefault := log.NewEntry(log.StandardLogger())
 	tagsExtractor := grpc_ctxtags.WithFieldExtractor(grpc_ctxtags.CodeGenRequestFieldExtractor)
 	unaryInterceptors = append(unaryInterceptors,
 		grpc_ctxtags.UnaryServerInterceptor(tagsExtractor),
 		requestid.UnaryServerInterceptor(false),
 		armadaerrors.UnaryServerInterceptor(2000),
-		grpc_logrus.UnaryServerInterceptor(messageDefault),
 		logging.UnaryServerInterceptor(),
 	)
 	streamInterceptors = append(streamInterceptors,
 		grpc_ctxtags.StreamServerInterceptor(tagsExtractor),
 		requestid.StreamServerInterceptor(false),
 		armadaerrors.StreamServerInterceptor(2000),
-		grpc_logrus.StreamServerInterceptor(messageDefault),
 		logging.StreamServerInterceptor(),
 	)
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"reflect"
+	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus/ctxlogrus"
 	"github.com/pkg/errors"
@@ -86,6 +87,7 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 	}
 	nodeIdByJobId := make(map[string]string)
 	scheduledJobs := make([]interfaces.LegacySchedulerJob, 0)
+	totalGangSchedulingTime := time.Duration(0)
 	for {
 		gctx, err := sch.candidateGangIterator.Next()
 		if err != nil {
@@ -106,7 +108,12 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 			return nil, err
 		default:
 		}
-		if ok, unschedulableReason, err := sch.gangScheduler.Schedule(ctx, gctx); err != nil {
+		gangScheduleStartTime := time.Now()
+		ok, unschedulableReason, err := sch.gangScheduler.Schedule(ctx, gctx)
+		gangScheduleDuration := time.Now().Sub(gangScheduleStartTime)
+		totalGangSchedulingTime += gangScheduleDuration
+
+		if err != nil {
 			return nil, err
 		} else if ok {
 			for _, jctx := range gctx.JobSchedulingContexts {
@@ -129,6 +136,7 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 			}
 		}
 	}
+	log.Infof("Gang schedule summary duration %s cache hit %d cache miss %d key calc duration %s", totalGangSchedulingTime, sch.gangScheduler.CacheHit, sch.gangScheduler.CacheMiss, sch.gangScheduler.KeyCalculationDuration)
 	if sch.schedulingContext.TerminationReason == "" {
 		sch.schedulingContext.TerminationReason = "no remaining candidate jobs"
 	}
