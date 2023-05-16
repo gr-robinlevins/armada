@@ -138,7 +138,7 @@ func (sch *QueueScheduler) Schedule(ctx context.Context) (*SchedulerResult, erro
 	if sch.schedulingContext.TerminationReason == "" {
 		sch.schedulingContext.TerminationReason = "no remaining candidate jobs"
 	}
-	log.Infof("Gang schedule exiting because %s", sch.schedulingContext.TerminationReason)
+	log.Infof("Gang schedule exiting because %s number jobs scheduled %d, number gangs scheduled %d", sch.schedulingContext.TerminationReason, sch.schedulingContext.NumScheduledJobs, sch.schedulingContext.NumScheduledGangs)
 	if len(scheduledJobs) != len(nodeIdByJobId) {
 		return nil, errors.Errorf("only %d out of %d jobs mapped to a node", len(nodeIdByJobId), len(scheduledJobs))
 	}
