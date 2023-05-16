@@ -493,7 +493,7 @@ func (sch *PreemptingQueueScheduler) schedule(ctx context.Context, inMemoryJobRe
 		jobIteratorByQueue[qctx.Queue] = NewMultiJobsIterator(evictedIt, queueIt)
 	}
 
-	log.Infof("scheduler info max queue look back %d, max jobs to schedule %d, max gangs to schedule %s", sch.constraints.MaxQueueLookback, sch.constraints.MaximumJobsToSchedule, sch.constraints.MaximumGangsToSchedule)
+	log.Infof("scheduler info max queue look back %d, max jobs to schedule %d, max gangs to schedule %d", sch.constraints.MaxQueueLookback, sch.constraints.MaximumJobsToSchedule, sch.constraints.MaximumGangsToSchedule)
 	sched, err := NewQueueScheduler(
 		sch.schedulingContext,
 		sch.constraints,
