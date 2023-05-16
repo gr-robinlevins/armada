@@ -212,7 +212,6 @@ func (sch *PreemptingQueueScheduler) Schedule(ctx context.Context) (*SchedulerRe
 
 	log.Infof("preempting scheduler evict oversubscribed took %s", time.Now().Sub(evictOversubscribed))
 
-
 	rescheduleStart := time.Now()
 	// Re-schedule evicted jobs/schedule new jobs.
 	// Only necessary if a non-zero number of jobs were evicted.
@@ -493,6 +492,8 @@ func (sch *PreemptingQueueScheduler) schedule(ctx context.Context, inMemoryJobRe
 		}
 		jobIteratorByQueue[qctx.Queue] = NewMultiJobsIterator(evictedIt, queueIt)
 	}
+
+	log.Infof("scheduler info max queue look back %d, max jobs to schedule %d, max gangs to schedule %s", sch.constraints.MaxQueueLookback, sch.constraints.MaximumJobsToSchedule, sch.constraints.MaximumGangsToSchedule)
 	sched, err := NewQueueScheduler(
 		sch.schedulingContext,
 		sch.constraints,
